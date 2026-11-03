@@ -1,0 +1,22 @@
+# Local credentials and account state
+.local/
+.env
+.env.*
+!.env.example
+accounts.json
+accounts.json.*.tmp
+credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Installed dependencies and local output
+node_modules/
+coverage/
+__pycache__/
+*.pyc
+*.log
+*.zip
+.DS_Store
+._*
