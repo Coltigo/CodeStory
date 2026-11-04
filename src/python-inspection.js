@@ -20,7 +20,7 @@ export function inspectPython(model){
   function argumentFacts(list,target,callee){
     if(!list)return [];
     const parts=children(list),segments=[];let segment=[];
-    for(const part of parts){if(['(',')',','].includes(part.name)){if(segment.length){segments.push(segment);segment=[];}}else segment.push(part);}
+    for(const part of parts){if(part.name==='Comment')continue;if(['(',')',','].includes(part.name)){if(segment.length){segments.push(segment);segment=[];}}else segment.push(part);}
     if(segment.length)segments.push(segment);
     const parameters=(target?.params||[]).map(p=>p.match(/^\s*([\p{L}_][\p{L}\p{N}_]*)\s*(?::|=|$)/u)?.[1]||null);
     const simpleSignature=!!target&&parameters.every(Boolean)&&!target.params.some(p=>/^[\s]*[*/]/.test(p));
@@ -95,6 +95,7 @@ export function inspectPython(model){
         const target=model.symbols.find(s=>s.id===call.targetId),definition=children(node.parent).find(n=>n.name==='FunctionDefinition'||n.name==='ClassDefinition');
         add(target?'handoffs':'unresolvedCalls',node,context,{name:call.name,arguments:[],resultName:null,returnedDirectly:false,timing:'definition-time',definitionTime:true,definitionName:definition?text(children(definition).find(n=>n.name==='VariableName')):null,...(target?{toId:target.id}:{})});
       }
+      for(const part of parts)visit(part,{...context,definitionHeader:true});return;
     }
     if(node.name==='CallExpression'){
       const callee=parts[0],call=calls.get(callee?.from),target=model.symbols.find(s=>s.id===call?.targetId);
@@ -102,7 +103,7 @@ export function inspectPython(model){
       // Match offsets from the existing scope-aware resolver; never resolve by name here.
       const awaited=node.parent?.name==='AwaitExpression',container=awaited?node.parent:node;
       const parent=container.parent,parentParts=children(parent),assign=parent?.name==='AssignStatement'&&parentParts.length===3&&parentParts[0].name==='VariableName'&&parentParts[2].from===container.from&&parentParts[2].to===container.to&&text(parentParts[1])==='='?text(parentParts[0]):null;
-      const properties={name:call?.name||text(callee),bindingKind:call?.bindingKind||'unknown',arguments:args,resultName:assign,awaited,returnedDirectly:parent?.name==='ReturnStatement',timing:target?.generator?(target.async?'deferred-async-generator':'deferred-generator'):target?.async?'deferred-async':'not-inferred'};
+      const properties={name:call?.name||text(callee),bindingKind:call?.bindingKind||'unknown',arguments:args,resultName:assign,passedToCall:parent?.name==='ArgList'&&parent.parent?.name==='CallExpression'?calls.get(parent.parent.firstChild?.from)?.name||null:null,awaited,returnedDirectly:parent?.name==='ReturnStatement',timing:target?.generator?(target.async?'deferred-async-generator':'deferred-generator'):target?.async?'deferred-async':'not-inferred'};
       if(target)add('handoffs',node,context,{...properties,toId:target.id});
       else add('unresolvedCalls',node,context,properties);
     }

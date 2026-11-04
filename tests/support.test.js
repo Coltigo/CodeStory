@@ -1,23 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {analyze} from '../src/parser.js';
-import {languageSupport,OFFICIAL_LANGUAGES} from '../src/support.js';
+import {languageSupport,STRUCTURED_LANGUAGES} from '../src/support.js';
 import {samples} from '../src/samples.js';
 import {describeStoryChunk,storyFunction,storyReadiness} from '../src/narrative.js';
 
-for(const language of OFFICIAL_LANGUAGES)test(language+' has an official, useful built-in reading guide',()=>{
-  const sample=samples.find(s=>languageSupport(s.filename).language===language);
+for(const language of STRUCTURED_LANGUAGES)test(language+' has a source-linked syntax reading guide',()=>{
+  const sample=samples.find(s=>languageSupport(s.filename).language===language)||(language==='TypeScript'?{filename:'example.ts',code:'function double(value:number):number {return value * 2;}\ndouble(4);'}:null);
   assert.ok(sample,'Missing sample: '+language);
-  const model=analyze(sample.code,sample.filename);assert.equal(model.support.official,true);assert.equal(model.language,language);assert.ok(model.chunks.length>1);
+  const model=analyze(sample.code,sample.filename);assert.equal(model.support.structured,true);assert.equal(model.language,language);assert.ok(model.chunks.length>1);
   assert.equal(new Set(model.flow).size,model.chunks.length);assert.equal(new Set(model.concepts).size,model.chunks.length);
   for(const chunk of model.chunks){assert.ok(chunk.start<chunk.end);assert.ok(chunk.startLine<=chunk.endLine);assert.ok(model.code.slice(chunk.start,chunk.end).trim());}
 });
-test('TypeScript retains dedicated grammar support but is labeled experimental',()=>{
-  const m=analyze('const identity = <T>(value:T):T => value;\nidentity(1);','generic.ts');assert.equal(m.language,'TypeScript');assert.equal(m.symbols[0].name,'identity');assert.equal(m.support.official,false);assert.match(m.warnings.join(' '),/cannot guarantee/);
+test('TypeScript uses its grammar without a support-tier label',()=>{
+  const m=analyze('const identity = <T>(value:T):T => value;\nidentity(1);','generic.ts');assert.equal(m.language,'TypeScript');assert.equal(m.symbols[0].name,'identity');assert.equal(m.support.structured,true);assert.equal(m.warnings.length,0);assert.equal(Object.hasOwn(m.support,'official'),false);
 });
 test('unknown extensions preserve source and line references without invented functions or semantic claims',()=>{
   const code='some niche language\n  unknown syntax\n\nmore source\n';
-  const m=analyze(code,'example.niche');assert.equal(m.code,code);assert.equal(m.support.official,false);assert.equal(m.symbols.length,0);assert.equal(m.highlights.length,0);assert.match(m.warnings.join(' '),/not officially supported/);assert.match(m.analysisNotes.join(' '),/not been verified/);
+  const m=analyze(code,'example.niche');assert.equal(m.code,code);assert.equal(m.support.structured,false);assert.equal(m.symbols.length,0);assert.equal(m.highlights.length,0);assert.match(m.warnings.join(' '),/source as text/);assert.match(m.analysisNotes.join(' '),/not been verified/);
   for(const c of m.chunks)assert.equal(c.startLine,code.slice(0,c.start).split('\n').length);
 });
 test('binary-looking uploads are rejected instead of receiving an unverified explanation',()=>{
@@ -46,7 +46,7 @@ test('Python grammar limitations have an honest, useful error',()=>{
 
 
 test('story availability depends on understood structure and file complexity',()=>{
-  for(const sample of samples.filter(s=>languageSupport(s.filename).official))assert.equal(storyReadiness(analyze(sample.code,sample.filename)).available,true,sample.filename);
+  for(const sample of samples.filter(s=>languageSupport(s.filename).structured))assert.equal(storyReadiness(analyze(sample.code,sample.filename)).available,true,sample.filename);
   assert.equal(storyReadiness(analyze('puts "hello"','test.rb')).available,false);
   assert.equal(storyReadiness(analyze('def double(n):\n    return n * 2\n','simple.py')).available,true);
   assert.equal(storyReadiness(analyze(Array.from({length:25},(_,i)=>`value${i} = ${i}`).join('\n'),'many.py')).available,false);

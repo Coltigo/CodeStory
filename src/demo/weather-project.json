@@ -1,0 +1,208 @@
+{
+  "title": "Harbor Town weather report",
+  "provenance": "Prewritten, source-reviewed demo; no live AI request.",
+  "files": [
+    {
+      "path": "main.py",
+      "code": "from report import make_report\n\n\ndef main():\n    readings = [18, 22, 20]\n    print(make_report(\"Harbor Town\", readings))\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": "report.py",
+      "code": "from units import average\n\n\ndef make_report(city, readings):\n    temperature = average(readings)\n    if temperature >= 25:\n        label = \"warm\"\n    else:\n        label = \"mild\"\n    return f\"{city}: {temperature:.1f} C, {label}\"\n"
+    },
+    {
+      "path": "units.py",
+      "code": "def average(values):\n    if not values:\n        return 0\n    return sum(values) / len(values)\n"
+    }
+  ],
+  "guides": {
+    "main.py": {
+      "demo": true,
+      "model": "Preprocessed demo",
+      "cached": true,
+      "usage": null,
+      "story": {
+        "overview": "This is the starting file for a small weather-report program. When run directly, it sends Harbor Town and three readings (18, 22 and 20) to make_report, then prints the returned message.",
+        "conceptOrder": [
+          "c0",
+          "c1",
+          "c2"
+        ],
+        "flowOrder": [
+          "c2",
+          "c1",
+          "c0"
+        ],
+        "chapters": [
+          {
+            "id": "c0",
+            "title": "Connect to the report builder",
+            "beginner": "Make make_report from report.py available to this file. Importing does not call that function.",
+            "developer": "Make make_report from report.py available to this file. Importing does not call that function.",
+            "concept": "Source connection",
+            "term": "",
+            "storyBeginner": "Pip reads a sign pointing to a coworker in another room. The sign gives this file a name to use for that helper. Reading the sign is not the same as asking the helper to perform the job. The selected source shows the coworker’s own job card in the other file.",
+            "storyDeveloper": "Pip reads a sign pointing to a coworker in another room. The sign gives this file a name to use for that helper. Reading the sign is not the same as asking the helper to perform the job. The selected source shows the coworker’s own job card in the other file."
+          },
+          {
+            "id": "c1",
+            "title": "Gather readings and display the report",
+            "beginner": "Create the sample readings, request a report for Harbor Town, and print it.",
+            "developer": "Create the sample readings, request a report for Harbor Town, and print it. The readings are fixed example data; no weather service is contacted.",
+            "concept": "Data handoff",
+            "term": "",
+            "storyBeginner": "Pip is waiting in the front room when his friend main opens a job card. Three temperature slips are laid on the workbench: 18, 22, and 20. main puts them together in a list and gives the bundle the local name readings. That name lets the next instruction refer to the whole bundle. A second package holds the town name, Harbor Town.\n\nThe job card names coworker make_report as the friend who can turn those supplies into a message. main does not do the averaging here. It also does not choose warm or mild. Those jobs belong to helpers in other rooms. Pip carries the town name and the reading bundle together on one request. At the other workbench, the town name will be called city, while the bundle will still be called readings.\n\nWhen make_report sends back a text reply, main can hand that reply straight to print. The code does not store the message under a new local variable first. Printing puts a message on the noticeboard; it is different from returning that text to another caller. main has no explicit return statement of its own. Its useful visible effect is the display request. We will open make_report’s job card next, then return here to see how that reply is used.",
+            "storyDeveloper": "Pip is waiting in the front room when his friend main opens a job card. Three temperature slips are laid on the workbench: 18, 22, and 20. main puts them together in a list and gives the bundle the local name readings. That name lets the next instruction refer to the whole bundle. A second package holds the town name, Harbor Town.\n\nThe job card names coworker make_report as the friend who can turn those supplies into a message. main does not do the averaging here. It also does not choose warm or mild. Those jobs belong to helpers in other rooms. Pip carries the town name and the reading bundle together on one request. At the other workbench, the town name will be called city, while the bundle will still be called readings.\n\nWhen make_report sends back a text reply, main can hand that reply straight to print. The code does not store the message under a new local variable first. Printing puts a message on the noticeboard; it is different from returning that text to another caller. main has no explicit return statement of its own. Its useful visible effect is the display request. We will open make_report’s job card next, then return here to see how that reply is used."
+          },
+          {
+            "id": "c2",
+            "title": "Start only when run directly",
+            "beginner": "The __name__ check calls main only when this file runs as the main program. Importing main.py does not satisfy that check.",
+            "developer": "Under the __main__ guard, main() starts the example reporting flow; importing the module skips this invocation.",
+            "concept": "Conditional start",
+            "term": "A main guard distinguishes running a file directly from importing it.",
+            "storyBeginner": "At the front door, Pip finds a check on the job card. If this file is the main program, the check allows a visit to friend main. Otherwise, that particular visit is skipped. The guard does not say which path was actually observed. It explains how the program could begin when someone runs it directly.",
+            "storyDeveloper": "At the front door, Pip finds a check on the job card. If this file is the main program, the check allows a visit to friend main. Otherwise, that particular visit is skipped. The guard does not say which path was actually observed. It explains how the program could begin when someone runs it directly."
+          }
+        ],
+        "functions": [
+          {
+            "id": "s0",
+            "purpose": "Create the sample readings, request a report for Harbor Town, and print it.",
+            "sideEffects": "Prints the returned report to standard output.",
+            "caveats": "The readings are fixed example data; no weather service is contacted.",
+            "storyBeginner": "Pip is waiting in the front room when his friend main opens a job card. Three temperature slips are laid on the workbench: 18, 22, and 20. main puts them together in a list and gives the bundle the local name readings. That name lets the next instruction refer to the whole bundle. A second package holds the town name, Harbor Town.\n\nThe job card names coworker make_report as the friend who can turn those supplies into a message. main does not do the averaging here. It also does not choose warm or mild. Those jobs belong to helpers in other rooms. Pip carries the town name and the reading bundle together on one request. At the other workbench, the town name will be called city, while the bundle will still be called readings.\n\nWhen make_report sends back a text reply, main can hand that reply straight to print. The code does not store the message under a new local variable first. Printing puts a message on the noticeboard; it is different from returning that text to another caller. main has no explicit return statement of its own. Its useful visible effect is the display request. We will open make_report’s job card next, then return here to see how that reply is used.",
+            "storyDeveloper": "Pip is waiting in the front room when his friend main opens a job card. Three temperature slips are laid on the workbench: 18, 22, and 20. main puts them together in a list and gives the bundle the local name readings. That name lets the next instruction refer to the whole bundle. A second package holds the town name, Harbor Town.\n\nThe job card names coworker make_report as the friend who can turn those supplies into a message. main does not do the averaging here. It also does not choose warm or mild. Those jobs belong to helpers in other rooms. Pip carries the town name and the reading bundle together on one request. At the other workbench, the town name will be called city, while the bundle will still be called readings.\n\nWhen make_report sends back a text reply, main can hand that reply straight to print. The code does not store the message under a new local variable first. Printing puts a message on the noticeboard; it is different from returning that text to another caller. main has no explicit return statement of its own. Its useful visible effect is the display request. We will open make_report’s job card next, then return here to see how that reply is used."
+          }
+        ],
+        "limitations": [
+          "The readings are fixed example data; no weather service is contacted.",
+          "This included guide is prewritten example content. No model is called and the source is not executed."
+        ],
+        "narrative": {
+          "available": true,
+          "reason": "",
+          "metaphor": "workshop",
+          "premise": "Pip carries labeled packages through a workshop with a room for each file. This is a metaphor for source instructions, not an observed run.",
+          "overview": "Pip gathers Harbor Town and three readings, visits the report room, and carries the returned message to the noticeboard.",
+          "relationships": []
+        }
+      }
+    },
+    "report.py": {
+      "demo": true,
+      "model": "Preprocessed demo",
+      "cached": true,
+      "usage": null,
+      "story": {
+        "overview": "make_report turns a city label and temperature readings into one formatted message. It asks average in units.py for the mean, labels temperatures of at least 25 as warm and all others as mild, and returns the message.",
+        "conceptOrder": [
+          "c0",
+          "c1"
+        ],
+        "flowOrder": [
+          "c1",
+          "c0"
+        ],
+        "chapters": [
+          {
+            "id": "c0",
+            "title": "Connect to the averaging helper",
+            "beginner": "Make average from units.py available to this file. Its body runs only when invoked.",
+            "developer": "Make average from units.py available to this file. Its body runs only when invoked.",
+            "concept": "Source connection",
+            "term": "",
+            "storyBeginner": "Pip reads a sign pointing to a coworker in another room. The sign gives this file a name to use for that helper. Reading the sign is not the same as asking the helper to perform the job. The selected source shows the coworker’s own job card in the other file.",
+            "storyDeveloper": "Pip reads a sign pointing to a coworker in another room. The sign gives this file a name to use for that helper. Reading the sign is not the same as asking the helper to perform the job. The selected source shows the coworker’s own job card in the other file."
+          },
+          {
+            "id": "c1",
+            "title": "Build the weather message",
+            "beginner": "Average the readings, choose warm or mild at the 25-degree boundary, and return a message formatted to one decimal place.",
+            "developer": "Average the readings, choose warm or mild at the 25-degree boundary, and return a message formatted to one decimal place. Expects readings that support averaging and a city value usable in a formatted string.",
+            "concept": "Data handoff",
+            "term": "",
+            "storyBeginner": "Pip steps into the report room with the town package and the reading bundle. Friend make_report knows them by the local labels city and readings. The helper needs a single temperature for the message, so it asks coworker average for help. That friend works in units.py. Pip takes the readings along, while make_report keeps the city label ready for the final message.\n\nAt average’s workbench, the same incoming bundle gets the local name values. A new name inside a helper does not by itself mean a new bundle was copied. When average finishes, its numeric reply comes back to make_report. Here, that reply is given the label temperature. This is the handoff that connects the calculation in one file to the decision in another.\n\nNow make_report faces its dilemma: is temperature at least 25? If yes, the helper writes warm on a label. Otherwise, it writes mild. The helper does not need to take both paths. It then combines city, temperature, and the chosen label into a single text message. The temperature is written with one digit after the decimal point, and C appears as text beside it. Pip can carry the completed message back to main. This helper returns the message; main is the coworker that asks print to show it.",
+            "storyDeveloper": "Pip steps into the report room with the town package and the reading bundle. Friend make_report knows them by the local labels city and readings. The helper needs a single temperature for the message, so it asks coworker average for help. That friend works in units.py. Pip takes the readings along, while make_report keeps the city label ready for the final message.\n\nAt average’s workbench, the same incoming bundle gets the local name values. A new name inside a helper does not by itself mean a new bundle was copied. When average finishes, its numeric reply comes back to make_report. Here, that reply is given the label temperature. This is the handoff that connects the calculation in one file to the decision in another.\n\nNow make_report faces its dilemma: is temperature at least 25? If yes, the helper writes warm on a label. Otherwise, it writes mild. The helper does not need to take both paths. It then combines city, temperature, and the chosen label into a single text message. The temperature is written with one digit after the decimal point, and C appears as text beside it. Pip can carry the completed message back to main. This helper returns the message; main is the coworker that asks print to show it."
+          }
+        ],
+        "functions": [
+          {
+            "id": "s0",
+            "purpose": "Average the readings, choose warm or mild at the 25-degree boundary, and return a message formatted to one decimal place.",
+            "sideEffects": "None visible in this body",
+            "caveats": "Expects readings that support averaging and a city value usable in a formatted string.",
+            "storyBeginner": "Pip steps into the report room with the town package and the reading bundle. Friend make_report knows them by the local labels city and readings. The helper needs a single temperature for the message, so it asks coworker average for help. That friend works in units.py. Pip takes the readings along, while make_report keeps the city label ready for the final message.\n\nAt average’s workbench, the same incoming bundle gets the local name values. A new name inside a helper does not by itself mean a new bundle was copied. When average finishes, its numeric reply comes back to make_report. Here, that reply is given the label temperature. This is the handoff that connects the calculation in one file to the decision in another.\n\nNow make_report faces its dilemma: is temperature at least 25? If yes, the helper writes warm on a label. Otherwise, it writes mild. The helper does not need to take both paths. It then combines city, temperature, and the chosen label into a single text message. The temperature is written with one digit after the decimal point, and C appears as text beside it. Pip can carry the completed message back to main. This helper returns the message; main is the coworker that asks print to show it.",
+            "storyDeveloper": "Pip steps into the report room with the town package and the reading bundle. Friend make_report knows them by the local labels city and readings. The helper needs a single temperature for the message, so it asks coworker average for help. That friend works in units.py. Pip takes the readings along, while make_report keeps the city label ready for the final message.\n\nAt average’s workbench, the same incoming bundle gets the local name values. A new name inside a helper does not by itself mean a new bundle was copied. When average finishes, its numeric reply comes back to make_report. Here, that reply is given the label temperature. This is the handoff that connects the calculation in one file to the decision in another.\n\nNow make_report faces its dilemma: is temperature at least 25? If yes, the helper writes warm on a label. Otherwise, it writes mild. The helper does not need to take both paths. It then combines city, temperature, and the chosen label into a single text message. The temperature is written with one digit after the decimal point, and C appears as text beside it. Pip can carry the completed message back to main. This helper returns the message; main is the coworker that asks print to show it."
+          }
+        ],
+        "limitations": [
+          "Expects readings that support averaging and a city value usable in a formatted string.",
+          "This included guide is prewritten example content. No model is called and the source is not executed."
+        ],
+        "narrative": {
+          "available": true,
+          "reason": "",
+          "metaphor": "workshop",
+          "premise": "Pip carries labeled packages through a workshop with a room for each file. This is a metaphor for source instructions, not an observed run.",
+          "overview": "make_report asks coworker average for a number, chooses warm or mild, and returns a formatted weather message.",
+          "relationships": []
+        }
+      }
+    },
+    "units.py": {
+      "demo": true,
+      "model": "Preprocessed demo",
+      "cached": true,
+      "usage": null,
+      "story": {
+        "overview": "average returns the arithmetic mean of a nonempty collection by dividing its sum by its length. For an empty collection, it returns 0 instead.",
+        "conceptOrder": [
+          "c0"
+        ],
+        "flowOrder": [
+          "c0"
+        ],
+        "chapters": [
+          {
+            "id": "c0",
+            "title": "Find the mean of the readings",
+            "beginner": "Return 0 for empty input; otherwise return sum(values) / len(values).",
+            "developer": "Return 0 for empty input; otherwise return sum(values) / len(values). Returning 0 for empty readings is a rule in this code, not a measured temperature. Nonempty items must support numeric averaging.",
+            "concept": "Data handoff",
+            "term": "",
+            "storyBeginner": "Pip reaches the calculation room and meets friend average. The bundle handed to this workbench is called values here. The local label is different from readings in the report room, but this request still carries the caller’s supplied readings. The helper’s first instruction is a check for an empty bundle.\n\nIf there are no readings to use, the job card says to reply with 0. That path ends the job before the division. The zero is a choice written by the programmer; it is not a temperature measured from an empty bundle. With a nonempty bundle, the other instructions can continue. sum adds the values, and len counts how many items there are.\n\nDividing that sum by that count makes the mean. For the supplied slips, 18 plus 22 plus 20 is 60. There are three slips, so the static calculation predicts 20. Nothing in this body writes into the supplied list. It calculates a reply from it and returns that reply to its caller. Pip can now carry the number back to make_report, where the number receives the label temperature. From there, it can help decide which weather label belongs in the message.",
+            "storyDeveloper": "Pip reaches the calculation room and meets friend average. The bundle handed to this workbench is called values here. The local label is different from readings in the report room, but this request still carries the caller’s supplied readings. The helper’s first instruction is a check for an empty bundle.\n\nIf there are no readings to use, the job card says to reply with 0. That path ends the job before the division. The zero is a choice written by the programmer; it is not a temperature measured from an empty bundle. With a nonempty bundle, the other instructions can continue. sum adds the values, and len counts how many items there are.\n\nDividing that sum by that count makes the mean. For the supplied slips, 18 plus 22 plus 20 is 60. There are three slips, so the static calculation predicts 20. Nothing in this body writes into the supplied list. It calculates a reply from it and returns that reply to its caller. Pip can now carry the number back to make_report, where the number receives the label temperature. From there, it can help decide which weather label belongs in the message."
+          }
+        ],
+        "functions": [
+          {
+            "id": "s0",
+            "purpose": "Return 0 for empty input; otherwise return sum(values) / len(values).",
+            "sideEffects": "None visible in this body",
+            "caveats": "Returning 0 for empty readings is a rule in this code, not a measured temperature. Nonempty items must support numeric averaging.",
+            "storyBeginner": "Pip reaches the calculation room and meets friend average. The bundle handed to this workbench is called values here. The local label is different from readings in the report room, but this request still carries the caller’s supplied readings. The helper’s first instruction is a check for an empty bundle.\n\nIf there are no readings to use, the job card says to reply with 0. That path ends the job before the division. The zero is a choice written by the programmer; it is not a temperature measured from an empty bundle. With a nonempty bundle, the other instructions can continue. sum adds the values, and len counts how many items there are.\n\nDividing that sum by that count makes the mean. For the supplied slips, 18 plus 22 plus 20 is 60. There are three slips, so the static calculation predicts 20. Nothing in this body writes into the supplied list. It calculates a reply from it and returns that reply to its caller. Pip can now carry the number back to make_report, where the number receives the label temperature. From there, it can help decide which weather label belongs in the message.",
+            "storyDeveloper": "Pip reaches the calculation room and meets friend average. The bundle handed to this workbench is called values here. The local label is different from readings in the report room, but this request still carries the caller’s supplied readings. The helper’s first instruction is a check for an empty bundle.\n\nIf there are no readings to use, the job card says to reply with 0. That path ends the job before the division. The zero is a choice written by the programmer; it is not a temperature measured from an empty bundle. With a nonempty bundle, the other instructions can continue. sum adds the values, and len counts how many items there are.\n\nDividing that sum by that count makes the mean. For the supplied slips, 18 plus 22 plus 20 is 60. There are three slips, so the static calculation predicts 20. Nothing in this body writes into the supplied list. It calculates a reply from it and returns that reply to its caller. Pip can now carry the number back to make_report, where the number receives the label temperature. From there, it can help decide which weather label belongs in the message."
+          }
+        ],
+        "limitations": [
+          "Returning 0 for empty readings is a rule in this code, not a measured temperature. Nonempty items must support numeric averaging.",
+          "This included guide is prewritten example content. No model is called and the source is not executed."
+        ],
+        "narrative": {
+          "available": true,
+          "reason": "",
+          "metaphor": "workshop",
+          "premise": "Pip carries labeled packages through a workshop with a room for each file. This is a metaphor for source instructions, not an observed run.",
+          "overview": "Friend average checks the reading bundle, then sends 0 for an empty bundle or its mean back to the caller.",
+          "relationships": []
+        }
+      }
+    }
+  },
+  "projectStory": {
+    "title": "A weather report finds its way home.",
+    "opening": "Pip arrives at the workshop with a town name and three temperature slips. The town is Harbor Town. The slips read 18, 22, and 20. Someone wants those pieces turned into one easy-to-read weather message.\n\nNo one helper does every part. main gathers the supplies, make_report prepares the message, and average works out the number in the middle. We will follow their request through the rooms, then follow the reply back home.",
+    "ending": "The reply can now travel back through the report room to main. In this example, the three readings add up to 60, and there are three readings. Their mean is 20. Because 20 is below 25, make_report chooses mild rather than warm.\n\nThe message comes back as “Harbor Town: 20.0 C, mild”. main can put it on the noticeboard with print. The outer __name__ check allows this starting visit only when main.py runs directly.\n\nThat outcome is a static prediction from the included inputs and instructions. CodeStory has not run the file or called a model to produce this demo."
+  }
+}

@@ -73,30 +73,30 @@ test('one consented AI response supplies both explanation styles and both detail
   }finally{ui.close();}
 });
 
-test('an experimental language keeps literal reading and shows a Story Mode notice',async()=>{
+test('a text-inspected language keeps literal reading and shows a Story Mode notice',async()=>{
   const ui=await app();
   try{
-    await ui.upload('puts "hello"\n','hello.rb');assert.equal(ui.$('source-language').textContent,'Ruby');assert.equal(ui.$('language-notice').hidden,false);assert.match(ui.$('language-notice').textContent,/not officially supported/i);assert.match(ui.$('language-notice').textContent,/cannot guarantee/i);
-    ui.$('story-mode').click();assert.equal(ui.$('story-unavailable-dialog').open,true);assert.equal(ui.$('literal-mode').getAttribute('aria-pressed'),'true');assert.match(ui.$('story-unavailable-reason').textContent,/verified structure/);ui.$('developer').click();assert.equal(ui.$('language-notice').hidden,false);assert.match(ui.$('language-notice').textContent,/cannot guarantee/i);assert.ok(ui.document.querySelectorAll('#story .chapter').length>0);assert.equal(ui.$('ai-error').hidden,true);assert.equal(ui.count('/api/analyze'),0);
+    await ui.upload('puts "hello"\n','hello.rb');assert.equal(ui.$('source-language').textContent,'Ruby');assert.equal(ui.$('language-notice').hidden,false);assert.match(ui.$('language-notice').textContent,/source as text/i);assert.match(ui.$('language-notice').textContent,/not verified/i);
+    ui.$('story-mode').click();assert.equal(ui.$('story-unavailable-dialog').open,true);assert.equal(ui.$('literal-mode').getAttribute('aria-pressed'),'true');assert.match(ui.$('story-unavailable-reason').textContent,/verified structure/);ui.$('developer').click();assert.equal(ui.$('language-notice').hidden,false);assert.match(ui.$('language-notice').textContent,/not verified/i);assert.ok(ui.document.querySelectorAll('#story .chapter').length>0);assert.equal(ui.$('ai-error').hidden,true);assert.equal(ui.count('/api/analyze'),0);
   }finally{ui.close();}
 });
 
-test('Story Mode exports preserve the metaphor notice, literal facts, and experimental warning',async()=>{
+test('Story Mode exports preserve the metaphor notice, literal facts, and text-inspection limits',async()=>{
   const ui=await app({connected:true});
   try{
     await ui.upload();ui.$('story-mode').click();ui.$('explain-button').click();ui.$('confirm-analysis').click();await waitFor(()=>ui.$('analysis-kind').textContent==='AI + SOURCE ANALYSIS','completed AI story');
     ui.$('export-button').click();ui.$('export-markdown').click();const text=await ui.exportedText();assert.match(text,/Story Mode/);assert.match(text,/single workshop metaphor/);assert.match(text,/not observed execution/);assert.match(text,/Narrative beginner/);assert.match(text,/Literal beginner/);assert.equal(ui.count('/api/analyze'),1);
-    await ui.upload('puts "hello"\n','hello.rb');ui.$('export-button').click();ui.$('export-markdown').click();const experimental=await ui.exportedText();assert.match(experimental,/not officially supported/);assert.match(experimental,/cannot guarantee/);assert.match(experimental,/Explanation mode: Literal/);assert.equal(ui.count('/api/analyze'),1);
+    await ui.upload('puts "hello"\n','hello.rb');ui.$('export-button').click();ui.$('export-markdown').click();const experimental=await ui.exportedText();assert.match(experimental,/source as text/);assert.match(experimental,/not verified/);assert.match(experimental,/Explanation mode: Literal/);assert.equal(ui.count('/api/analyze'),1);
   }finally{ui.close();}
 });
 
 
-test('all six official languages remain readable through local modes and maps',async()=>{
+test('languages with syntax parsers remain readable through local modes and maps',async()=>{
   const ui=await app();
   try{
-    for(const sample of samples.filter(s=>languageSupport(s.filename).official)){
+    for(const sample of samples.filter(s=>languageSupport(s.filename).structured)){
       await ui.upload(sample.code,sample.filename);
-      assert.match(ui.$('language-notice').textContent,/Official support/);
+      assert.doesNotMatch(ui.$('language-notice').textContent,/official|experimental support/i);
       assert.equal(ui.$('source-language').textContent,languageSupport(sample.filename).language);
       ui.$('story-mode').click();ui.$('developer').click();assert.ok(ui.document.querySelectorAll('#story .chapter').length>0);
       ui.$('map-tab').click();assert.ok(ui.$('call-map').textContent.trim());
@@ -108,11 +108,11 @@ test('all six official languages remain readable through local modes and maps',a
   }finally{ui.close();}
 });
 
-test('the example picker can load a chosen official language without cycling',async()=>{
+test('the example picker can load a chosen language without cycling',async()=>{
   const ui=await app();
   try{
     ui.$('new-code').click();const index=samples.findIndex(s=>s.filename==='page.html');ui.$('example-select').value=String(index);ui.$('load-example').click();
-    assert.equal(ui.$('filename').value,'page.html');assert.match(ui.$('input-language').textContent,/HTML.*Official support/);ui.$('analyze-button').click();assert.equal(ui.$('source-language').textContent,'HTML');assert.equal(ui.count('/api/analyze'),0);
+    assert.equal(ui.$('filename').value,'page.html');assert.match(ui.$('input-language').textContent,/^HTML$/);ui.$('analyze-button').click();assert.equal(ui.$('source-language').textContent,'HTML');assert.equal(ui.count('/api/analyze'),0);
   }finally{ui.close();}
 });
 
@@ -133,7 +133,7 @@ test('loading an unsuitable file leaves Story Mode with a clear notice',async()=
   const ui=await app();try{await ui.upload();ui.$('story-mode').click();await ui.upload('def small():\n    return 1\n'+'# a long file\n'.repeat(351),'large.py');assert.equal(ui.$('literal-mode').getAttribute('aria-pressed'),'true');assert.equal(ui.$('story-unavailable-dialog').open,true);assert.match(ui.$('story-unavailable-reason').textContent,/350 lines/);assert.equal(ui.count('/api/analyze'),0);}finally{ui.close();}
 });
 
-test('chapter numbers toggle completion and sidebar checks without changing the selected source',async()=>{
+test('chapter numbers toggle completion without a sidebar without changing the selected source',async()=>{
   const ui=await app();try{
     await ui.upload();assert.equal(ui.document.querySelector('[data-done],.chapter-footer'),null);
     assert.doesNotMatch(ui.$('story').textContent,/Understood|See the source/);
@@ -141,10 +141,10 @@ test('chapter numbers toggle completion and sidebar checks without changing the 
     assert.equal(button.tagName,'BUTTON');assert.equal(button.type,'button');assert.equal(button.getAttribute('aria-pressed'),'false');
     const selectedSource=ui.$('source-range').textContent;button.focus();button.click();
     assert.equal(ui.document.activeElement,button,'completion retains keyboard focus');assert.equal(button.textContent,'✓');assert.equal(button.getAttribute('aria-pressed'),'true');assert.match(button.getAttribute('aria-label'),/Mark incomplete/);
-    assert.ok(ui.document.querySelector(`[data-chapter="${id}"] .mini-dot.is-complete`));assert.equal(ui.$('source-range').textContent,selectedSource);
+    assert.equal(ui.document.querySelector('#chapter-nav'),null);assert.equal(ui.$('source-range').textContent,selectedSource);
     ui.$('developer').click();ui.$('story-mode').click();const after=ui.document.querySelector(`[data-complete="${id}"]`);assert.equal(after.getAttribute('aria-pressed'),'true');assert.equal(after.textContent,'✓');
-    after.click();assert.equal(after.getAttribute('aria-pressed'),'false');assert.equal(after.textContent,after.dataset.number);assert.equal(ui.document.querySelector(`[data-chapter="${id}"] .mini-dot.is-complete`),null);
-    after.click();await ui.upload();assert.ok([...ui.document.querySelectorAll('[data-complete]')].every(b=>b.getAttribute('aria-pressed')==='false'));assert.equal(ui.document.querySelector('#chapter-nav .mini-dot.is-complete'),null);
+    after.click();assert.equal(after.getAttribute('aria-pressed'),'false');assert.equal(after.textContent,after.dataset.number);assert.equal(ui.document.querySelector('.sidebar'),null);
+    after.click();await ui.upload();assert.ok([...ui.document.querySelectorAll('[data-complete]')].every(b=>b.getAttribute('aria-pressed')==='false'));assert.equal(ui.document.querySelector('#chapter-nav'),null);
     assert.ok(ui.document.querySelector('#story .line-link[data-source]'),'original line links remain available');
   }finally{ui.close();}
 });
@@ -157,7 +157,7 @@ test('source-derived package contents stay text in the story',async()=>{
 
 test('Python begins with useful inspection even when the status request fails, then offers a consented AI step',async()=>{
   const ui=await app({offline:true});try{
-    await ui.upload(samples[1].code,samples[1].filename);assert.equal(ui.$('file-inspection').hidden,false);assert.equal(ui.$('story').hidden,true);assert.equal(ui.$('inspection-tab').getAttribute('aria-selected'),'true');assert.match(ui.$('file-inspection').textContent,/Python file inspection/);assert.match(ui.$('file-inspection').textContent,/temperatures.*readings/s);assert.equal(ui.count('/api/analyze'),0);assert.equal(ui.count('/api/models'),0);
+    await ui.upload(samples[1].code,samples[1].filename);assert.equal(ui.$('file-inspection').hidden,false);assert.equal(ui.$('story').hidden,true);assert.equal(ui.$('inspection-tab').getAttribute('aria-selected'),'true');assert.match(ui.$('file-inspection').textContent,/File inspection/);assert.match(ui.$('file-inspection').textContent,/temperatures.*readings/s);assert.equal(ui.count('/api/analyze'),0);assert.equal(ui.count('/api/models'),0);
     const value=ui.document.querySelector('#file-inspection [data-inspect-value="average"][data-inspect-scope="s2"]');value.click();assert.equal(ui.$('inspection-name-explorer').hidden,false);assert.match(ui.$('inspection-name-explorer').textContent,/average_temperature\(readings\)/);assert.match(ui.$('inspection-name-explorer').textContent,/format_report\(city, average\)/);ui.document.querySelector('[data-close-name-explorer]').click();assert.equal(ui.$('inspection-name-explorer').hidden,true);assert.equal(ui.document.activeElement,value);
     ui.document.querySelector('#file-inspection [data-inspect-start="12"][data-inspect-end="12"]').click();assert.equal(ui.$('source-range').textContent,'Selected: L12');assert.deepEqual([...ui.document.querySelectorAll('.code-line.focus')].map(line=>line.dataset.line),['12']);
     ui.document.querySelector('[data-inspection-scan]').click();assert.equal(ui.$('connections-page').hidden,false);assert.equal(ui.count('/api/analyze'),0);

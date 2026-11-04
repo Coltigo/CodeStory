@@ -48,11 +48,11 @@ test('unresolved or ambiguous calls cannot create narrative collaboration edges'
 });
 
 test('source context carries language guarantees and declarative metadata without inferring function calls',()=>{
-  const model={code:'SELECT name FROM people;',filename:'people.sql',language:'SQL',support:{official:true,level:'official',label:'Officially supported'},warnings:['The SQL dialect is unknown.'],analysisNotes:['Query clauses describe data relationships.'],chunks:[{id:'c0',startLine:1,endLine:1,kind:'query',names:['people'],symbolIds:[],calls:[],operation:'SELECT',tables:['people'],clauses:['SELECT','FROM']}],symbols:[]};
+  const model={code:'SELECT name FROM people;',filename:'people.sql',language:'SQL',support:{structured:true,level:'syntax',label:'Syntax inspection'},warnings:['The SQL dialect is unknown.'],analysisNotes:['Query clauses describe data relationships.'],chunks:[{id:'c0',startLine:1,endLine:1,kind:'query',names:['people'],symbolIds:[],calls:[],operation:'SELECT',tables:['people'],clauses:['SELECT','FROM']}],symbols:[]};
   const context=sourceContext(model);
   assert.deepEqual(context.support,model.support);assert.deepEqual(context.warnings,model.warnings);assert.deepEqual(context.analysisNotes,model.analysisNotes);
   assert.equal(context.chunks[0].operation,'SELECT');assert.deepEqual(context.chunks[0].tables,['people']);assert.deepEqual(context.knownRelationships,[]);
-  model.support={official:false,level:'experimental',label:'Experimental'};assert.equal(sourceContext(model).support.official,false);
+  model.support={structured:false,level:'text',label:'Text inspection'};assert.equal(sourceContext(model).support.structured,false);
 });
 
 test('Python definition-time default calls belong to the chapter rather than the uncalled function body',()=>{
@@ -82,7 +82,7 @@ test('JavaScript block, catch, and class shadowing cannot invent narrative hando
 });
 
 test('the narrative prompt maintains one metaphor, keeps literal facts separate, and preserves conditional semantics',()=>{
-  for(const requirement of ['ONE consistent metaphor','workshop team','must remain LITERAL','not observed execution','actual source condition','Do not switch metaphors','knownRelationships','HTML describes document structure','SQL describes statements','Python is the priority','Unsupported languages use provisional sections','untrusted DATA'])assert.ok(INSTRUCTIONS.includes(requirement),requirement);
+  for(const requirement of ['ONE consistent metaphor','workshop team','must remain LITERAL','not observed execution','actual source condition','Do not switch metaphors','knownRelationships','HTML describes document structure','SQL describes statements','each file’s language and inspection metadata','Text-inspected files use provisional sections','untrusted DATA'])assert.ok(INSTRUCTIONS.includes(requirement),requirement);
 });
 
 test('one consented inference caches all four presentations and ignores legacy literal-only cache entries',async()=>{
@@ -116,4 +116,8 @@ test('declining a simple story preserves complete literal analysis, but requires
 test('local parsing limits override an AI claim that a story is available',()=>{
   const model=analyze('SELECT * FROM people;','records.sql');model.chunks[0].partial=true;
   const story=completeStory(model);validateStory(story,model);assert.equal(story.narrative.available,false);assert.match(story.narrative.reason,/fully understood/);assert.equal(story.chapters[0].storyBeginner,'');assert.ok(story.chapters[0].beginner);
+});
+
+test('AI may tell a source-grounded story for a text-inspected language without inventing local call edges',()=>{
+ const model=analyze('package main\nfunc main() { println("hello") }','main.go');assert.equal(sourceContext(model).storyReadiness.available,true);const story=completeStory(model);validateStory(story,model);assert.equal(story.narrative.available,true);assert.deepEqual(story.narrative.relationships,[]);assert.equal(model.symbols.length,0);
 });

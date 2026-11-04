@@ -11,6 +11,7 @@ async function main(){
   let command;try{({stdout:command}=await promisify(execFile)('/bin/ps',['-p',String(pid),'-o','command=']));}catch{throw new Error('Could not verify the recorded CodeStory process.');}
   if(!command.includes(path.join(root,'runtime','server.mjs'))&&!/\bnode\s+runtime\/server\.mjs(?:\s|$)/.test(command.trim()))throw new Error('The recorded process is not a CodeStory server; it was left untouched.');
   process.kill(pid,'SIGTERM');
-  console.log('CodeStory stopped.');
+  for(let attempt=0;attempt<80;attempt++){try{process.kill(pid,0);}catch(error){if(error.code==='ESRCH'){console.log('CodeStory and its managed local server stopped.');return;}throw error;}await new Promise(resolve=>setTimeout(resolve,100));}
+  console.log('Shutdown requested. CodeStory may still be finishing local-server cleanup; wait before restarting.');
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});

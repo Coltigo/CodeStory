@@ -3,9 +3,9 @@ const display=s=>s.qualifiedName||s.name;
 export const WORKSHOP_PREMISE='In a little workshop, a courier named Pip carries labeled packages between helpers. Each helper has a job card, and a choice on a card can send the work down a different path. This story is a metaphor for what the code could do, not a report of a real run. Open “What the code actually does” whenever you want the literal explanation.';
 
 /** Conservative file-level limits; a model may also decline a misleading story. */
-export function storyReadiness(model){
+export function storyReadiness(model,{ai=false}={}){
   let reason='';
-  if(model.support?.official===false||model.chunks.some(c=>c.kind==='text'))reason='This language does not have enough verified structure here to tell a reliable, simple story.';
+  if(!ai&&model.chunks.some(c=>c.kind==='text'))reason='This language does not have enough verified structure here to tell a reliable, simple story.';
   else if(model.chunks.some(c=>c.partial)||(model.analysisNotes||[]).some(n=>/parser recovered|parser.*recover|HTML is incomplete/i.test(n)))reason='Some of this file could not be fully understood by the parser. A story could hide important missing details.';
   else if(model.chunks.length>24||model.symbols.length>12)reason='This file has too many parts for one short, easy-to-follow story. A smaller section will make a clearer story.';
   else if((model.lineCount||0)>350)reason='This file is longer than the local story limit of 350 lines. Try a smaller section; comments and blank lines also count toward this limit.';

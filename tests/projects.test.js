@@ -43,7 +43,7 @@ test('cycles terminate and include every reachable helper once',()=>{
 
 test('project input limits count UTF-8 bytes and reject paths, dependencies, secrets and duplicates',()=>{
  for(const path of ['../main.py','/main.py','a//b.py','a\\b.py','C:/main.py','a/./main.py','a/../b.py'])assert.throws(()=>validateProjectFiles([file(path,'print(1)')]));
- for(const path of ['.git/hook.py','.venv/lib.py','secrets.py','app/.env.py','node_modules/x.py','build/out.py','file.js'])assert.ok(excludedProjectPath(path));
+ for(const path of ['.git/hook.py','.venv/lib.py','secrets.py','app/.env.py','node_modules/x.py','build/out.py','photo.png'])assert.ok(excludedProjectPath(path));
  assert.throws(()=>validateProjectFiles([file('a.py','x'),file('a.py','y')]),/Duplicate/);assert.throws(()=>validateProjectFiles(Array.from({length:21},(_,i)=>file(i+'.py','x'))),/20/);assert.throws(()=>validateProjectFiles([file('a.py','é'.repeat(40001))]),/80 KB/);assert.throws(()=>validateProjectFiles(['a','b','c','d'].map(p=>file(p+'.py','#'.repeat(70000)))),/240 KB/);
 });
 
@@ -63,4 +63,33 @@ test('bundled small projects have readable source and two verified cross-file ha
 
 test('AI context includes selected import data modules even when no cross-file function is called',()=>{
  const p=inspectProject([file('main.py','from config import FACTOR\nvalue = 5 * FACTOR'),file('config.py','FACTOR = 0.62')]);const context=projectContext(p,'main.py',projectId('main.py'));assert.equal(context.relatedSource[0].path,'config.py');assert.equal(context.knownImports[0].targetPath,'config.py');assert.equal(context.knownConnections.length,0);
+});
+
+test('mixed-language projects preserve source, local calls and language-specific inspection context',()=>{
+ const sources=[
+  file('main.js','function double(value){return value * 2;}\nconsole.log(double(3));'),
+  file('typed.cts','function add(value:number):number {return value + 1;}\nadd(3);'),
+  file('page.html','<h1>Hello</h1><script src="./main.js"></script>'),
+  file('App.java','class App { static int doubleValue(int value) { return value * 2; } public static void main(String[] args) { System.out.println(doubleValue(3)); } }'),
+  file('App.cs','class App { static int Double(int value) { return value * 2; } static void Main() { System.Console.WriteLine(Double(3)); } }'),
+  file('query.sql','SELECT name FROM people WHERE active = true;'),
+  file('script.py','def double(value):\n    return value * 2\nprint(double(3))'),
+  file('main.go','package main\nfunc main() { println("hello") }'),
+  file('mystery.custom','an unfamiliar source language\nnext instruction'),
+  file('Dockerfile','FROM node:24\nWORKDIR /app\n'),
+  file('style.css','body { color: purple; }')
+ ];
+ const p=inspectProject(sources);assert.ok(p.files.every(f=>f.model),JSON.stringify(p.files.filter(f=>f.error).map(f=>[f.path,f.error])));assert.equal(p.files.find(f=>f.path==='typed.cts').model.language,'TypeScript');assert.equal(p.files.find(f=>f.path==='main.go').model.language,'Go');assert.ok(p.links.some(e=>e.path==='main.js'&&e.to.localId==='s0'));assert.ok(p.links.every(e=>!e.crossFile));assert.ok(p.imports.some(i=>i.path==='page.html'&&i.targetPath==='main.js'));
+ const context=projectContext(p,'main.go',projectId('main.go'));assert.equal(context.scope,'selected-source-project');assert.equal(context.relatedSource.length,sources.length-1);assert.equal(context.manifest.find(f=>f.path==='main.go').inspection,'text');assert.equal(context.manifest.find(f=>f.path==='main.js').inspection,'syntax');
+});
+
+test('project file selection accepts uncommon and extensionless text but rejects binary contents and binary file types',()=>{
+ for(const path of ['main.rb','program.rs','file.js','Makefile','file.unusual','style.svg','settings.json'])assert.equal(excludedProjectPath(path),'');
+ for(const path of ['app.exe','font.woff2','archive.zip','document.pdf','photo.png'])assert.ok(excludedProjectPath(path));
+ assert.throws(()=>validateProjectFiles([file('program.custom','\u0000\u0001data')]),/plain-text source/);
+ const p=inspectProject([file('directives.cs','#define DEBUG\nclass App {}')]);assert.notEqual(p.files[0].empty,true,'C# directives must not be mistaken for Python comments');
+});
+
+test('JavaScript import context remains separate from verified callable bindings',()=>{
+ const p=inspectProject([file('main.js','import {work} from "./helpers.js";\nwork();'),file('helpers.js','export function work(){return 1;}'),file('other.py','def work():\n    return 2')]);assert.equal(p.links.length,0);assert.equal(p.imports[0].targetPath,'helpers.js');assert.equal(p.unknownCalls[0].callName,'work');assert.ok(projectContext(p,'main.js',projectId('main.js')).relatedSource.some(f=>f.path==='helpers.js'));
 });

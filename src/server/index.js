@@ -5,6 +5,8 @@ import {fileURLToPath} from 'node:url';
 import {randomBytes,createHash} from 'node:crypto';
 import {spawn} from 'node:child_process';
 import {AccountStore,ChatGPTAuth,AppError,safeEqual} from './auth.js';
+import {LocalRuntime,LocalPreferences} from './local-runtime.js';
+import {localEndpoint,localCatalog} from './local.js';
 import {StoryAI} from './ai.js';
 import {inspectProject,projectContext} from '../projects.js';
 import {ApiKeyConnections,ApiKeyAI,API_PROVIDERS} from './providers.js';
@@ -17,9 +19,10 @@ export async function openBrowser(url){
   return new Promise(resolve=>{const child=spawn(command,args,{stdio:'ignore',windowsHide:true});child.once('error',()=>resolve(false));child.once('exit',code=>resolve(code===0));setTimeout(()=>resolve(false),5000).unref();});
 }
 async function readJSON(req,maxBytes=550000){const chunks=[];let size=0;for await(const bytes of req){size+=bytes.length;if(size>maxBytes)throw new AppError('The request is too large. Choose a smaller source file.',413,'body_too_large');chunks.push(bytes);}try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{throw new AppError('Expected a JSON request.',400,'invalid_json');}}
-export async function createCodeStory({port=4173,root=APP_ROOT,dataDir=path.join(root,'.local'),fetcher=fetch,browserOpener=openBrowser,store:providedStore}={}){
+export async function createCodeStory({port=4173,root=APP_ROOT,dataDir=path.join(root,'.local'),fetcher=fetch,browserOpener=openBrowser,store:providedStore,localRuntime:providedRuntime}={}){
   const store=providedStore||new AccountStore(dataDir);await store.init();
   const auth=new ChatGPTAuth(store,{fetcher}),ai=new StoryAI(auth,{fetcher}),connections=new ApiKeyConnections({fetcher}),apiAI=new ApiKeyAI(connections,{fetcher});
+  const localRuntime=providedRuntime||new LocalRuntime({fetcher}),localPreferences=new LocalPreferences(dataDir);await localPreferences.init();const activeControllers=new Set();let localNotice=localPreferences.notice||'';
   const verifiedPlans=new Set();let changingConnection=false;
   const busy=()=>changingConnection||ai.busy||apiAI.busy;
   const connectionStatus=()=>{
@@ -46,7 +49,22 @@ export async function createCodeStory({port=4173,root=APP_ROOT,dataDir=path.join
         if(!String(req.headers['content-type']||'').startsWith('application/json'))throw new AppError('Expected a JSON request.',415,'invalid_content_type');
       }
       if(req.method==='GET'&&url.pathname==='/api/health')return json(200,{app:'CodeStory',version:'1.0.0',local:true});
-      if(req.method==='GET'&&url.pathname==='/api/status')return json(200,{csrfToken:csrf,...store.publicStatus(),authResult:auth.lastResult,busy:busy(),connection:connectionStatus(),apiConnections:connections.publicProfiles(),providers:API_PROVIDERS});
+      if(req.method==='GET'&&url.pathname==='/api/status')return json(200,{csrfToken:csrf,...store.publicStatus(),authResult:auth.lastResult,busy:busy(),connection:connectionStatus(),apiConnections:connections.publicProfiles(),providers:API_PROVIDERS,localPreferences:localPreferences.value,localRuntime:localRuntime.status(),localNotice});
+      if(req.method==='POST'&&url.pathname==='/api/local/preferences'){
+        const body=await readJSON(req);const preferences=await mutateConnection(()=>localPreferences.save(body));return json(200,{preferences});
+      }
+      if(req.method==='POST'&&url.pathname==='/api/local/start'){
+        const body=await readJSON(req);const runtime=await mutateConnection(()=>localRuntime.start(body));localNotice=runtime.message;return json(200,{runtime});
+      }
+      if(req.method==='POST'&&url.pathname==='/api/local/stop'){
+        const endpoint=localRuntime.status().endpoint;const runtime=await mutateConnection(()=>localRuntime.stop());if(runtime.stopped&&connections.active()?.provider==='local'&&connections.localEndpointIs(endpoint)){const profile=connections.active();connections.remove(profile.id);apiAI.clear();}localNotice=runtime.message;return json(200,{runtime});
+      }
+      if(req.method==='POST'&&url.pathname==='/api/connections/local/models'){
+        const body=await readJSON(req);const discovered=await mutateConnection(()=>localCatalog(fetcher,localEndpoint(body.endpoint)));return json(200,{models:discovered.models});
+      }
+      if(req.method==='POST'&&url.pathname==='/api/connections/local'){
+        const body=await readJSON(req);const connection=await mutateConnection(async()=>{if(body.autoStart===true&&body.runner==='ollama')await localRuntime.start(body);const selected=await connections.connectLocal(body);if(body.runner)await localPreferences.save(body);return selected;});return json(200,{connection});
+      }
       if(req.method==='POST'&&url.pathname==='/api/connections/api'){
         const body=await readJSON(req);const connection=await mutateConnection(()=>connections.connect(body));return json(200,{connection});
       }
@@ -85,7 +103,7 @@ export async function createCodeStory({port=4173,root=APP_ROOT,dataDir=path.join
         if(body.connectionId&&body.connectionId!==connection?.id)throw new AppError('Your AI connection changed. Review the file and connection before analyzing again.',409,'connection_changed');
         if(ai.busy||apiAI.busy)throw new AppError('An analysis is already running. Wait for it or cancel it first.',409,'analysis_busy');
         res.once('close',()=>{if(!res.writableEnded)controller.abort();});
-        const result=await (connections.active()?apiAI:ai).explain(body,controller.signal,{project:context});if(connection?.kind==='chatgpt_plan')verifiedPlans.add(connection.id);return json(200,{...result,connection:connection?{id:connection.id,kind:connection.kind,provider:connection.provider,label:connection.label,billing:connection.billing}:null});
+        activeControllers.add(controller);let result;try{result=await (connections.active()?apiAI:ai).explain(body,controller.signal,{project:context});}finally{activeControllers.delete(controller);}if(connection?.kind==='chatgpt_plan')verifiedPlans.add(connection.id);return json(200,{...result,connection:connection?{id:connection.id,kind:connection.kind,provider:connection.provider,label:connection.label,billing:connection.billing}:null});
       }
       if(url.pathname.startsWith('/api/'))throw new AppError('Endpoint not found.',404,'not_found');
       if(req.method!=='GET')throw new AppError('Not found.',404,'not_found');
@@ -102,7 +120,8 @@ export async function createCodeStory({port=4173,root=APP_ROOT,dataDir=path.join
     }
   });
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',()=>{origin='http://127.0.0.1:'+server.address().port;resolve();});});
-  return {server,auth,ai,store,connections,apiAI,get origin(){return origin;},close:()=>new Promise(resolve=>server.close(resolve))};
+  if(localPreferences.value.autoStart&&localPreferences.value.model){changingConnection=true;(async()=>{try{await localRuntime.start(localPreferences.value);if(!localRuntime.closed)await connections.connectLocal(localPreferences.value);localNotice=localRuntime.status().message;}catch(error){localNotice=error.message;}finally{changingConnection=false;}})();}
+  return {server,auth,ai,store,connections,apiAI,localRuntime,localPreferences,get origin(){return origin;},close:async()=>{for(const controller of activeControllers)controller.abort();await localRuntime.close();return new Promise(resolve=>server.close(resolve));}};
 }
 async function main(){
   const root=APP_ROOT,port=Number(process.env.CODESTORY_PORT||4173),lockPath=path.join(root,'.local','runtime.lock');
@@ -115,7 +134,7 @@ async function main(){
   try{
     const app=await createCodeStory({port,root});
     console.log('\nCodeStory is ready at '+app.origin+'\nKeep this window open while using CodeStory. Press Control-C to stop.\n');
-    for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{app.server.close();await cleanup();process.exit(0);});
+    for(const signal of ['SIGINT','SIGTERM'])process.once(signal,async()=>{await app.close();await cleanup();process.exit(0);});
     if(process.argv.includes('--open'))await openBrowser(app.origin);
   }catch(e){await cleanup();throw e;}
 }

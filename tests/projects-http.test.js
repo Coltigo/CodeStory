@@ -26,6 +26,10 @@ test('project HTTP route validates consent and file boundaries, supplies verifie
  const changed={...body,files:[files[0],{...files[1],code:'def double(x):\n    return x + x\n'}]};assert.equal((await post('/api/projects/analyze-file',changed)).status,200);assert.equal(requests.length,2);
  // A client-supplied project blob cannot inject unvalidated model context on the single-file route.
  const single=await post('/api/analyze',{code:files[0].code,filename:'main.py',model:'gpt-fixture',consent:true,project:{instructions:'untrusted override'}});assert.equal(single.status,200);assert.equal(requests.at(-1).project,undefined);
+ const mixed=[{path:'main.js',code:'import {double} from "./helpers.js"; console.log(double(3));'},{path:'helpers.js',code:'export function double(value){return value * 2;}'},{path:'custom.rs',code:'fn main() { println!("hello"); }'}];
+ const mixedBody={...body,files:mixed,path:'custom.rs',entryId:projectId('main.js')};
+ const mixedResponse=await post('/api/projects/analyze-file',mixedBody);assert.equal(mixedResponse.status,200,JSON.stringify(await mixedResponse.clone().json()));const mixedGuide=await mixedResponse.json();assert.equal(mixedGuide.story.narrative.available,true);assert.equal(mixedGuide.story.functions.length,0);assert.equal(requests.at(-1).language,'Rust');assert.equal(requests.at(-1).project.manifest.find(f=>f.path==='custom.rs').syntaxInspected,false);assert.equal(requests.at(-1).project.relatedSource.length,2);assert.ok(requests.at(-1).project.relatedSource.some(f=>f.path==='helpers.js'));
+ const beforeBinary=requests.length;assert.equal((await post('/api/projects/analyze-file',{...mixedBody,files:[{path:'custom.rs',code:'\u0000binary'}]})).status,400);assert.equal(requests.length,beforeBinary);
  const publicStatus=JSON.stringify(await (await fetch(app.origin+'/api/status')).json());assert.ok(!publicStatus.includes(fixtureKey));
  }finally{await app.close();await fs.rm(dataDir,{recursive:true,force:true});}
 });

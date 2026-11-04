@@ -1,4 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
+import {localEndpoint,localCatalog,localJSON} from './local.js';
 import {analyze} from '../parser.js';
 import {AppError} from './auth.js';
 import {INSTRUCTIONS,STORY_SCHEMA,STORY_VERSION,sourceContext,validateStory,readResponseStream} from './ai.js';
@@ -75,7 +76,7 @@ function capture(connections){
   if(!profile)throw new AppError('Connect and select an API provider before using AI explanations.',401,'api_connection_required');
   return {...profile,revision:data.revision};
 }
-function publicProfile(profile,activeId){return {id:profile.id,kind:'api_key',provider:profile.provider,label:profile.label,ready:true,billing:'api',analysisVerified:profile.analysisVerified,active:profile.id===activeId};}
+function publicProfile(profile,activeId){return {id:profile.id,kind:profile.provider==='local'?'local':'api_key',provider:profile.provider,label:profile.label,ready:true,billing:profile.provider==='local'?'local':'api',preferredModel:profile.model||null,analysisVerified:profile.analysisVerified,active:profile.id===activeId};}
 async function catalog(fetcher,provider,key){
   const items=new Map(),limits=new Map(),seen=new Set();let next=null;
   for(let page=0;page<MAX_PAGES;page++){
@@ -118,6 +119,13 @@ export class ApiKeyConnections {
     data.profiles.set(profile.id,profile);data.activeId=profile.id;data.revision++;
     return publicProfile(profile,data.activeId);
   }
+  async connectLocal({endpoint,model,label}={}){
+    endpoint=localEndpoint(endpoint);const discovered=await localCatalog(this.fetcher,endpoint);
+    if(!discovered.models.some(m=>m.id===model))throw new AppError('Choose a model from this local server.',400,'invalid_model');
+    label=typeof label==='string'&&label.trim()?label.trim():'Local AI';if(label.length>60||/[\x00-\x1f\x7f]/.test(label))throw new AppError('Use a short local connection name.');
+    const data=state.get(this),profile={id:randomUUID(),provider:'local',key:'',endpoint,model,label,analysisVerified:false,catalog:discovered,modelsAt:Date.now()};data.profiles.set(profile.id,profile);data.activeId=profile.id;data.revision++;return publicProfile(profile,data.activeId);
+  }
+  localEndpointIs(endpoint){const data=state.get(this);return data.profiles.get(data.activeId)?.endpoint===endpoint;}
   publicProfiles(){const data=state.get(this);return [...data.profiles.values()].map(p=>publicProfile(p,data.activeId));}
   active(){const data=state.get(this),profile=data.profiles.get(data.activeId);return profile?publicProfile(profile,data.activeId):null;}
   select(id){const data=state.get(this),profile=data.profiles.get(id);if(!profile)throw new AppError('That API connection was not found. Connect it again.',404,'api_connection_not_found');data.activeId=id;data.revision++;return publicProfile(profile,id);}
@@ -126,7 +134,7 @@ export class ApiKeyConnections {
   async models(refresh=false){
     const snapshot=capture(this),data=state.get(this);
     if(!refresh&&Date.now()-snapshot.modelsAt<120000)return snapshot.catalog.models.map(m=>({...m}));
-    const discovered=await catalog(this.fetcher,snapshot.provider,snapshot.key);current(this,snapshot);
+    const discovered=snapshot.provider==='local'?await localCatalog(this.fetcher,snapshot.endpoint):await catalog(this.fetcher,snapshot.provider,snapshot.key);current(this,snapshot);
     Object.assign(data.profiles.get(snapshot.id),{catalog:discovered,modelsAt:Date.now()});
     return discovered.models.map(m=>({...m}));
   }
@@ -140,6 +148,11 @@ function usage(data,provider){
 }
 async function generate(fetcher,snapshot,model,context,signal){
   const {provider,key}=snapshot,input=JSON.stringify(context);let body,url=bases[provider],response;
+  if(provider==='local'){
+    const data=await localJSON(fetcher,snapshot.endpoint,'/chat/completions',{signal,timeout:600000,body:{model,messages:[{role:'system',content:INSTRUCTIONS},{role:'user',content:input}],stream:false,max_tokens:16384,response_format:{type:'json_schema',json_schema:{name:'code_story',strict:true,schema:STORY_SCHEMA}}}});
+    const choice=data?.choices?.[0];if(choice?.finish_reason!=='stop'||typeof choice.message?.content!=='string'||!choice.message.content.trim())throw new AppError('The local model did not finish a complete explanation. Try a smaller file or a model with a larger context/output limit.',502,'local_incomplete_response');
+    return {text:choice.message.content,usage:data.usage?{input_tokens:data.usage.prompt_tokens,output_tokens:data.usage.completion_tokens}:null};
+  }
   if(provider==='openai'){
     url+='/responses';body={model,instructions:INSTRUCTIONS,input:[{role:'user',content:input}],store:false,stream:true,text:{format:{type:'json_schema',name:'code_story',strict:true,schema:STORY_SCHEMA}}};
   }else if(provider==='anthropic'){
@@ -190,7 +203,7 @@ export class ApiKeyAI {
       const cacheKey=createHash('sha256').update(JSON.stringify([snapshot.id,code,filename,model,STORY_VERSION,...(project?[project]:[])])).digest('hex');
       if(this.cache.has(cacheKey))return {...this.cache.get(cacheKey),cached:true};
       const result=await generate(this.fetcher,snapshot,model,{...sourceContext(parsed),...(project?{project}:{})},signal);abortCheck(signal);current(this.connections,snapshot);
-      if(result.text.includes(snapshot.key))throw new AppError('The AI service returned an unsafe response. Nothing was saved; try another model.',502,'invalid_provider_response');
+      if(snapshot.key&&result.text.includes(snapshot.key))throw new AppError('The AI service returned an unsafe response. Nothing was saved; try another model.',502,'invalid_provider_response');
       const story=parseJSON(result.text);validateStory(story,parsed);
       const completed={story,model,provider:snapshot.provider,usage:result.usage,cached:false,createdAt:new Date().toISOString()};
       state.get(this.connections).profiles.get(snapshot.id).analysisVerified=true;

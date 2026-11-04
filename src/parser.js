@@ -69,8 +69,8 @@ export function analyze(code, filename = 'untitled.js') {
   const finish=raw=>finalizeModel({...raw,support,warnings:[...(raw.warnings||[]),...(support.warning?[support.warning]:[])],analysisNotes:raw.analysisNotes||[]});
   if (support.language === 'Python') return finish(analyzePython(code,filename));
   if (['HTML','Java','C#','SQL'].includes(support.language))return finish(analyzeLanguage(code,filename,support.language));
-  if (!['js', 'mjs', 'cjs', 'ts', 'jsx', 'tsx'].includes(extension))return finish(analyzeText(code,filename,support.language));
-  const ts = ['ts','tsx'].includes(extension);
+  if (!['JavaScript','TypeScript'].includes(support.language))return finish(analyzeText(code,filename,support.language));
+  const ts = support.language==='TypeScript';
   let ast;
   try { ast = parse(code, {sourceType:'unambiguous', plugins:[...(ts?['typescript']:[]), ...(!ts || extension === 'tsx'?['jsx']:[])], allowReturnOutsideFunction: true, tokens: true}); }
   catch (error) { throw new Error(`Couldn't parse ${filename}: ${error.reasonCode || 'syntax error'} at line ${error.loc?.line || '?'}, column ${(error.loc?.column || 0) + 1}. Check the code or file extension.`); }
@@ -138,7 +138,7 @@ export function orderedChunks(model, mode, original=false) {
 }
 export function describeChunk(chunk, model, mode='beginner') {
   if(['HTML','Java','C#','SQL'].includes(model.language)){const description=describeLanguageChunk(chunk,model,mode);if(description)return description;}
-  if(chunk.kind==='text')return {title:`Read source section ${model.chunks.indexOf(chunk)+1}`,body:'This source-text section is preserved with its original line numbers. This language has no dedicated parser here, so its functions, relationships, and execution order have not been verified. AI may offer a tentative explanation after you approve sending the file.',concept:'Unverified source',term:'Experimental support means the quality of parsing and explanations is not guaranteed.'};
+  if(chunk.kind==='text')return {title:`Read source section ${model.chunks.indexOf(chunk)+1}`,body:'This source-text section is preserved with its original line numbers. This language has no dedicated parser here, so its functions, relationships, and execution order have not been verified. AI may offer a tentative explanation after you approve sending the file.',concept:'Unverified source',term:'Text inspection preserves the source without verifying its language grammar or call relationships.'};
   if(chunk.kind==='directive')return {title:'Apply '+chunk.names.join(', '),body:'This directive changes how the following JavaScript is interpreted. It does not itself call a function.',concept:'Language mode',term:'A directive can enable a specific language mode, such as strict mode.'};
   if(chunk.kind==='documentation')return {title:'Read the file description',body:'This text documents the file or its intended use. It is not a function call.',concept:'Documentation',term:'Documentation describes code without running its application logic.'};
   const names=chunk.names.join(', '), s=model.symbols.find(s=>s.chunkId===chunk.id);

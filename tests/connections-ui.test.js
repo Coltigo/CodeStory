@@ -12,7 +12,7 @@ const plan={id:'plan-fixture',email:'reader@example.test',label:'Plan fixture',c
 const settle=()=>new Promise(resolve=>setTimeout(resolve,0));
 async function waitFor(fn,label){const end=Date.now()+3000;while(!fn()){if(Date.now()>end)assert.fail('Timed out: '+label);await new Promise(resolve=>setTimeout(resolve,5));}}
 function story(request,connection){const parsed=analyze(request.code,request.filename);return {model:request.model,connection,story:{overview:'Literal overview: double a number and print it.',conceptOrder:parsed.concepts,flowOrder:parsed.flow,chapters:parsed.chunks.map(c=>({id:c.id,title:'Double and display',beginner:'Literal beginner: this section defines or uses doubling.',developer:'Literal developer: multiplication produces the result.',concept:'Numeric operation',term:'',storyBeginner:'Workshop beginner: the double worker can return twice the value.',storyDeveloper:'Workshop developer: the double workbench represents multiplication.'})),functions:parsed.symbols.map(s=>({id:s.id,purpose:'Literal function purpose: multiply value by two.',sideEffects:'No side effects in the function.',caveats:'',storyBeginner:'Workshop function beginner.',storyDeveloper:'Workshop function developer.'})),limitations:[],narrative:{available:true,reason:'',metaphor:'workshop',premise:'This workshop is a metaphor, not a runtime trace.',overview:'Workshop overview: double can deliver a numeric result.',relationships:[]}}};}
-async function app({withPlan=false,connectError=null}={}){
+async function app({withPlan=false,connectError=null,localPreferences=null}={}){
  const requests=[],errors=[],exports=[],profiles=[];let connection=withPlan?{id:plan.id,kind:'chatgpt_plan',provider:'chatgpt',label:plan.email,ready:true,billing:'plan'}:null;
  const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e));
  const dom=new JSDOM(html,{url:'http://127.0.0.1:4173/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:vc}),{window}=dom,document=window.document,$=id=>document.getElementById(id);
@@ -22,8 +22,12 @@ async function app({withPlan=false,connectError=null}={}){
  window.addEventListener('error',event=>{errors.push(event.error||new Error(event.message));event.preventDefault();});
  window.fetch=async(url,options={})=>{
   const path=new URL(url,window.location.href).pathname,body=options.body?JSON.parse(options.body):null;requests.push({path,url:String(url),body,headers:options.headers});
-  if(path==='/api/status')return Response.json({csrfToken:'fixture-csrf',active:withPlan?plan:null,accounts:withPlan?[plan]:[],connection,apiConnections:profiles.map(p=>({...p,active:p.id===connection?.id})),busy:false});
+  if(path==='/api/status')return Response.json({csrfToken:'fixture-csrf',active:withPlan?plan:null,accounts:withPlan?[plan]:[],connection,apiConnections:profiles.map(p=>({...p,active:p.id===connection?.id})),busy:false,localPreferences,localRuntime:{managed:false,starting:false,message:'Fixture lifecycle'}});
   if(path==='/api/models')return Response.json({models:[{id:connection?.provider==='anthropic'?'claude-fixture':connection?.provider==='gemini'?'gemini-fixture':'gpt-fixture',name:'Fixture text model'}]});
+  if(path==='/api/local/preferences'){localPreferences={runner:body.runner,endpoint:body.endpoint,model:body.model,autoStart:body.autoStart};return Response.json({preferences:localPreferences});}
+  if(path==='/api/local/start')return Response.json({runtime:{managed:true,message:'Fixture local server started'}});
+  if(path==='/api/connections/local/models')return Response.json({models:[{id:'local-fixture',name:'Local fixture'}]});
+  if(path==='/api/connections/local'){connection={id:'local-1',kind:'local',provider:'local',label:'LM Studio',ready:true,billing:'local',preferredModel:'local-fixture'};profiles.push(connection);return Response.json({connection});}
   if(path==='/api/connections/api'){
    if(connectError)return Response.json({error:connectError(body.key),code:'api_auth_failed'},{status:401});
    assert.equal(body.billingConsent,true);const profile={id:'api-'+(profiles.length+1),kind:'api_key',provider:body.provider,label:body.label||'My API connection',ready:true,billing:'api',analysisVerified:false};profiles.push(profile);connection=profile;return Response.json({connection});
@@ -65,12 +69,22 @@ test('switching and removing connections clears stale AI results while retaining
  const ui=await app({withPlan:true});try{
   await ui.upload();await ui.connect();ui.$('back-to-reader').click();ui.$('explain-button').click();ui.$('confirm-analysis').click();await waitFor(()=>ui.$('analysis-kind').textContent==='AI + SOURCE ANALYSIS','API result');
   ui.$('account-button').click();ui.$('use-plan').click();await waitFor(()=>ui.$('analysis-kind').textContent==='LOCAL ANALYSIS','connection switch');assert.equal(ui.$('source-filename').textContent,'double.py');assert.match(ui.$('selected-connection').textContent,/ChatGPT plan/);
-  ui.document.querySelector('[data-use-api]').click();await waitFor(()=>ui.$('selected-connection').textContent.includes('My API connection'),'API reselection');ui.document.querySelector('[data-remove-api]').click();await waitFor(()=>ui.$('api-connection-list').textContent.includes('No API keys'),'API removal');assert.equal(ui.$('analysis-kind').textContent,'LOCAL ANALYSIS');assert.equal(ui.$('source-filename').textContent,'double.py');assert.equal(ui.count('/api/analyze'),1);
+  ui.document.querySelector('[data-use-api]').click();await waitFor(()=>ui.$('selected-connection').textContent.includes('My API connection'),'API reselection');ui.document.querySelector('[data-remove-api]').click();await waitFor(()=>ui.$('api-connection-list').textContent.includes('No API or local connections'),'API removal');assert.equal(ui.$('analysis-kind').textContent,'LOCAL ANALYSIS');assert.equal(ui.$('source-filename').textContent,'double.py');assert.equal(ui.count('/api/analyze'),1);
  }finally{ui.close();}
 });
-test('local AI remains an inactive preview and selecting a runner makes no connection request',async()=>{
- const ui=await app();try{ui.$('account-button').click();const before=ui.requests.length;ui.$('local-runner').value='lmstudio';ui.$('local-runner').dispatchEvent(new ui.window.Event('change'));assert.match(ui.$('local-endpoint').value,/1234/);assert.equal(ui.$('local-model').disabled,true);assert.equal(ui.document.querySelector('.local-preview button').disabled,true);assert.match(ui.document.querySelector('.local-preview').textContent,/COMING SOON/);await settle();assert.equal(ui.requests.length,before);}finally{ui.close();}
+test('local AI setup waits for explicit discovery and removes research copy',async()=>{
+ const ui=await app();try{ui.$('account-button').click();const before=ui.requests.length;ui.$('local-runner').value='lmstudio';ui.$('local-runner').dispatchEvent(new ui.window.Event('change'));assert.match(ui.$('local-endpoint').value,/1234/);assert.equal(ui.$('local-model').disabled,true);assert.equal(ui.$('local-discover').disabled,false);assert.equal(ui.$('local-connect').disabled,true);assert.doesNotMatch(ui.document.querySelector('.local-preview').textContent,/COMING SOON|What we learned/);await settle();assert.equal(ui.requests.length,before);}finally{ui.close();}
 });
 test('dismissing the analysis notice cancels pending consent',async()=>{
  const ui=await app({withPlan:true});try{await ui.upload();await waitFor(()=>!ui.$('model-select').disabled,'models');ui.$('explain-button').click();ui.$('consent-dialog').close();ui.$('confirm-analysis').click();await settle();assert.equal(ui.count('/api/analyze'),0);}finally{ui.close();}
+});
+
+
+test('local discovery and connection do not infer; analysis has a local consent notice',async()=>{
+ const ui=await app();try{ui.$('account-button').click();ui.$('local-discover').click();await waitFor(()=>ui.$('local-connect').disabled===false,'local discovery');assert.equal(ui.count('/api/analyze'),0);ui.$('local-connect').click();await waitFor(()=>ui.$('selected-connection').textContent.includes('Local AI'),'local connection');ui.$('back-to-reader').click();await ui.upload();ui.$('explain-button').click();assert.match(ui.$('consent-title').textContent,/local model/);assert.match(ui.$('consent-billing').textContent,/No ChatGPT/);assert.equal(ui.count('/api/analyze'),0);}finally{ui.close();}
+});
+
+
+test('saved nonsecret local preferences populate the form and saving needs no AI analysis',async()=>{
+ const ui=await app({localPreferences:{runner:'ollama',endpoint:'http://127.0.0.1:11434/v1',model:'saved-local:7b',autoStart:true}});try{ui.$('account-button').click();assert.equal(ui.$('local-model').value,'saved-local:7b');assert.equal(ui.$('local-auto-start').checked,true);ui.$('local-auto-start').checked=false;ui.$('local-save').click();await waitFor(()=>ui.count('/api/local/preferences')===1,'saved preferences');await waitFor(()=>!ui.$('local-save').disabled,'save complete');const request=ui.requests.find(r=>r.path==='/api/local/preferences');assert.deepEqual(Object.keys(request.body).sort(),['autoStart','endpoint','model','runner']);assert.equal(ui.count('/api/analyze'),0);assert.equal(ui.count('/api/local/start'),0);}finally{ui.close();}
 });

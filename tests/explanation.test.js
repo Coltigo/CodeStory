@@ -102,7 +102,7 @@ ORDER BY total DESC;`,check(context){
 
 for(const fixture of cases)test(`explanation evidence: ${fixture.filename} retains concrete behavior and verifiable source ranges`,()=>{
   const model=analyze(fixture.code,fixture.filename),context=sourceContext(model);
-  assert.equal(context.language,fixture.language);assert.equal(context.support.official,true);
+  assert.equal(context.language,fixture.language);assert.equal(context.support.structured,true);
   assert.equal(context.source,fixture.code);
   for(const fn of context.functions){
     const symbol=model.symbols.find(s=>s.id===fn.id);
